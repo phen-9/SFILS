@@ -12,86 +12,160 @@ cursor.execute("USE SFILS")
 print("SFILS database rebuilt!")
 
 print("Creating Tables:")
+print("Creating Patron Type table...")
+createPatronTypeTable = """
+CREATE TABLE PATRON_TYPE(
+    type_id INT NOT NULL PRIMARY KEY,
+    type_def CHAR(25)
+)
+"""
+cursor.execute(createPatronTypeTable)
+
 print("Creating Library table...")
 createLibraryTable = """
 CREATE TABLE LIBRARY (
-    name CHAR(20) NOT NULL PRIMARY KEY
+    library_code CHAR(5) NOT NULL PRIMARY KEY,
+    library_def CHAR(25)
 );
 """
 cursor.execute(createLibraryTable)
 
-print("Creating PatronType table...")
-createPatronTypeTable = """
-CREATE TABLE PATRONTYPE(
-    name CHAR(15) NOT NULL PRIMARY KEY
-)
+print("Creating Notification Preference Code")
+createNotificationPreferenceTable = """
+CREATE TABLE NOTIFICATION_PREFERENCE (
+    notification_type_code CHAR(2) NOT NULL PRIMARY KEY,
+    notification_type_def CHAR(10)
+);
 """
-cursor.execute(createPatronTypeTable)
+cursor.execute(createNotificationPreferenceTable)
 
 print("Creating Patron Table...")
 createPatronTable = """
 CREATE TABLE PATRON (
 id INT NOT NULL AUTO_INCREMENT,
-patron_type CHAR(15) NOT NULL,
+patron_type INT NOT NULL,
 total_checkouts INT NOT NULL,
 total_renewals INT NOT NULL,
-age_range VARCHAR(15) NOT NULL,
-home_library CHAR(20) NOT NULL,
+age_range VARCHAR(20) NOT NULL,
+home_library CHAR(5) NOT NULL,
 circulation_active_month CHAR(3),
-circulation_active_year YEAR,
-notice_preference CHAR(10) NOT NULL,
+circulation_active_year INT,
+notification_preference CHAR(2) NOT NULL,
 email_provided BOOL NOT NULL,
-year_registered YEAR NOT NULL,
 within_sf_county BOOL,
+year_registered INT NOT NULL,
+
 
 PRIMARY KEY (id),
 
 CONSTRAINT fk_library
 FOREIGN KEY (home_library)
-REFERENCES LIBRARY(name),
+REFERENCES LIBRARY(library_code),
 
-CONSTRAINT fk_patrontype
+CONSTRAINT fk_patron_type
 FOREIGN KEY (patron_type)
-REFERENCES PATRONTYPE(name)
+REFERENCES PATRON_TYPE(type_id),
+
+CONSTRAINT fk_notification_preference
+FOREIGN KEY (notification_preference)
+REFERENCES NOTIFICATION_PREFERENCE(notification_type_code)
 );
 """
 cursor.execute(createPatronTable)
 print("Tables created!")
 
-class Columns(Enum):
-    PATRON_TYPE = 0
-    TOTAL_CHECKOUTS = 1
-    TOTAL_RENEWALS = 2
-    AGE_RANGE = 3
-    HOME_LIBRARY = 4
-    ACTIVE_MONTH = 5
-    ACTIVE_YEAR = 6
-    NOTICE_PREFERENCE = 7
-    PROVIDED_EMAIL = 8
-    YEAR_REGISTERED = 9
-    WITHIN_SF = 10
+class Column(Enum):
+    PATRON_TYPE_CODE        = 0
+    PATRON_TYPE_DEF         = 1
+    TOTAL_CHECKOUTS         = 2
+    TOTAL_RENEWALS          = 3
+    AGE_RANGE               = 4
+    HOME_LIBRARY_CODE       = 5
+    HOME_LIBRARY_DEF        = 6
+    ACTIVE_MONTH            = 7
+    ACTIVE_YEAR             = 8
+    NOTICE_PREFERENCE_CODE  = 9
+    NOTICE_PREFERENCE_DEF   = 10
+    PROVIDED_EMAIL          = 11
+    WITHIN_SF               = 12
+    YEAR_REGISTERED         = 13
     
-    
+
 i = 0
-with open("Library_Usage_20261025.csv", "r") as file:
+with open("Library_Usage_Data.csv", "r") as file:
     #read each row of the data
     file.readline()
     for line in file:
         #split into columns
         columns = line.split(",")
+        for val in columns:
+            print(val)
         
-        #add patron type to PATRONTYPE table if not already in
-        insertPatronType = "INSERT IGNORE INTO PATRONTYPE VALUES(" + columns[0] + ");"
-        cursor.execute(insertPatronType)
-        
-        insertLibrary = "INSERT IGNORE INTO LIBRARY VALUES"
-        
+        #add patron type to PATRON_TYPE table if not already in
+        insertPatronType = "INSERT IGNORE INTO PATRON_TYPE (type_id, type_def) VALUES (%s, %s);"
+        val = (columns[Column.PATRON_TYPE_CODE.value], columns[Column.PATRON_TYPE_DEF.value])
+        cursor.execute(insertPatronType, val)    
+
+        #add library to LIBRARY table if not already in
+        insertLibrary = "INSERT IGNORE INTO LIBRARY (library_code, library_def) VALUES (%s, %s);"
+        val = (columns[Column.HOME_LIBRARY_CODE.value], columns[Column.HOME_LIBRARY_DEF.value])
+        cursor.execute(insertLibrary, val)
+
+        #add notification preference to NOTIFICATION_PREFERENCE table if not already in
+        insertNotifPreference = "INSERT IGNORE INTO NOTIFICATION_PREFERENCE (notification_type_code, notification_type_def) VALUES (%s, %s);"
+        val = (columns[Column.NOTICE_PREFERENCE_CODE.value], columns[Column.NOTICE_PREFERENCE_DEF.value])
+        cursor.execute(insertNotifPreference, val)
+
+        patronType = columns[Column.PATRON_TYPE_CODE.value]
+        totalCheckouts = columns[Column.TOTAL_CHECKOUTS.value]
+
+        ageRange = columns[Column.AGE_RANGE.value]
+        homeLibraryCode = columns[Column.HOME_LIBRARY_CODE.value]
+        noticePreference = columns[Column.NOTICE_PREFERENCE_CODE.value]
+
+        totalRenewals = columns[Column.TOTAL_RENEWALS.value]
+
+        emailProvided = "0"
+        if columns[Column.PROVIDED_EMAIL.value] == "True":
+            emailProvided = "1"
+        yearRegistered = columns[Column.YEAR_REGISTERED.value]
+
+
+        #add entry to patrons table
+        insertPatron = """
+        INSERT INTO PATRON (patron_type, total_checkouts, total_renewals, age_range, home_library, notification_preference, email_provided, year_registered )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        val = (
+            patronType,
+            totalCheckouts,
+            totalRenewals,
+            ageRange,
+            homeLibraryCode,
+            noticePreference,
+            emailProvided,
+            yearRegistered
+        )
+        cursor.execute(insertPatron, val)
         
         i += 1
         if i > 10000:
             break
         
+# cursor.execute("SELECT * FROM PATRON_TYPE;")
+# for line in cursor.fetchall():
+#     print(line)
 
+# cursor.execute("SELECT * FROM LIBRARY;")
+# for line in cursor.fetchall():
+#     print(line)
 
+# cursor.execute("SELECT * FROM NOTIFICATION_PREFERENCE;")
+# for line in cursor.fetchall():
+#     print(line)
+
+cursor.execute("SELECT * FROM PATRON;")
+for line in cursor.fetchall():
+    print(line)
 
 dataBase.close()
