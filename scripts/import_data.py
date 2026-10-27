@@ -1,8 +1,10 @@
+#Rebuilds database from scratch, then imports data from 'Library_Usage_Data.csv'
+
 from login import getConnection
 from enum import Enum
 
-dataBase = getConnection()
-cursor = dataBase.cursor()
+connection = getConnection()
+cursor = connection.cursor()
 
 #create and use SFILS database
 print("Rebuilding SFILS database...")
@@ -46,9 +48,9 @@ id INT NOT NULL AUTO_INCREMENT,
 patron_type INT NOT NULL,
 total_checkouts INT NOT NULL,
 total_renewals INT NOT NULL,
-age_range VARCHAR(20) NOT NULL,
+age_range VARCHAR(20),
 home_library CHAR(5) NOT NULL,
-circulation_active_month CHAR(3),
+circulation_active_month CHAR(20),
 circulation_active_year INT,
 notification_preference CHAR(2) NOT NULL,
 email_provided BOOL NOT NULL,
@@ -98,9 +100,7 @@ with open("Library_Usage_Data.csv", "r") as file:
     for line in file:
         #split into columns
         columns = line.split(",")
-        for val in columns:
-            print(val)
-        
+
         #add patron type to PATRON_TYPE table if not already in
         insertPatronType = "INSERT IGNORE INTO PATRON_TYPE (type_id, type_def) VALUES (%s, %s);"
         val = (columns[Column.PATRON_TYPE_CODE.value], columns[Column.PATRON_TYPE_DEF.value])
@@ -118,23 +118,29 @@ with open("Library_Usage_Data.csv", "r") as file:
 
         patronType = columns[Column.PATRON_TYPE_CODE.value]
         totalCheckouts = columns[Column.TOTAL_CHECKOUTS.value]
+        ageRange = "'" + columns[Column.AGE_RANGE.value] + "'"
+        homeLibraryCode = "'" + columns[Column.HOME_LIBRARY_CODE.value] + "'"
 
-        ageRange = columns[Column.AGE_RANGE.value]
-        homeLibraryCode = columns[Column.HOME_LIBRARY_CODE.value]
-        noticePreference = columns[Column.NOTICE_PREFERENCE_CODE.value]
+        activeMonth = "'" + columns[Column.ACTIVE_MONTH.value] + "'"
 
+        activeYear = str("NULL")
+        if columns[Column.ACTIVE_YEAR.value].isdigit():
+            activeYear = columns[Column.ACTIVE_YEAR.value]
+
+        noticePreference = "'" + columns[Column.NOTICE_PREFERENCE_CODE.value] + "'"
         totalRenewals = columns[Column.TOTAL_RENEWALS.value]
 
-        emailProvided = "0"
+        emailProvided = 0
         if columns[Column.PROVIDED_EMAIL.value] == "True":
-            emailProvided = "1"
-        yearRegistered = columns[Column.YEAR_REGISTERED.value]
+            emailProvided = 1
+
+        yearRegistered = columns[Column.YEAR_REGISTERED.value].rstrip('\n')
 
 
         #add entry to patrons table
         insertPatron = """
-        INSERT INTO PATRON (patron_type, total_checkouts, total_renewals, age_range, home_library, notification_preference, email_provided, year_registered )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO PATRON
+        VALUES (NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s);
         """
         val = (
             patronType,
@@ -142,30 +148,23 @@ with open("Library_Usage_Data.csv", "r") as file:
             totalRenewals,
             ageRange,
             homeLibraryCode,
+            activeMonth,
+            activeYear,
             noticePreference,
             emailProvided,
+            0,
             yearRegistered
         )
-        cursor.execute(insertPatron, val)
-        
+        cursor.execute(insertPatron % val)
+
         i += 1
-        if i > 10000:
-            break
+        if i %10000 == 0: 
+            print("Importing Data: " + str(i))
+
+        #limit number of entries to import?
+        # if i > 100000:
+        #     break
         
-# cursor.execute("SELECT * FROM PATRON_TYPE;")
-# for line in cursor.fetchall():
-#     print(line)
 
-# cursor.execute("SELECT * FROM LIBRARY;")
-# for line in cursor.fetchall():
-#     print(line)
-
-# cursor.execute("SELECT * FROM NOTIFICATION_PREFERENCE;")
-# for line in cursor.fetchall():
-#     print(line)
-
-cursor.execute("SELECT * FROM PATRON;")
-for line in cursor.fetchall():
-    print(line)
-
-dataBase.close()
+connection.commit()
+connection.close()
