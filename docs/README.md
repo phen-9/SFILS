@@ -22,17 +22,22 @@ Run app/app.py
 
 ## Schema
 
-Patron Type table
+Patron Type table:
+
 ![alt text](PatronTypeTable.png)
 
-Library table
+Library table:
+
 ![alt text](LibraryTable.png)
 
-Notification Preference table
+Notification Preference table:
+
 ![alt text](NotificationTypeTable.png)
 
-Patron table
+Patron table:
+
 ![alt text](PatronTable.png)
+
 home_library is a foreign key from Library(library_code)
 patron_type is a foreign key from Patron_Type(type_id)
 notification_preference is a foreign key from NotificationPreference(notificaion_type_code)
